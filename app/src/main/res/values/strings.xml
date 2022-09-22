@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">SocketExample</string>
+    <string name="button">Connect</string>
+    <string name="textview">TextView</string>
+    <string name="title_activity_maps">MapsActivity</string>
+    <string name="get_map">get Map</string>
+</resources>
