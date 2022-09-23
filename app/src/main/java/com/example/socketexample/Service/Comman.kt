@@ -29,6 +29,7 @@ class Comman :AppCompatActivity(){
 companion object{
     const val PACKAGE_NAME = "com.example.socketexample"
     const val RESULT_DATA_KEY = "$PACKAGE_NAME.RESULT_DATA_KEY"
+    const val REQUEST_CHECK_SETTINGS = 0x1
 }
 
     fun checkPermissions(): Boolean {

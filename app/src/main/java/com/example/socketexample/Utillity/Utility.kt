@@ -2,21 +2,15 @@ package com.example.socketexample.Utillity
 
 import android.annotation.SuppressLint
 import android.app.*
-import android.app.admin.DeviceAdminReceiver
-import android.app.admin.DevicePolicyManager
 import android.app.job.JobService
-import android.bluetooth.BluetoothManager
-import android.content.ComponentName
+import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.drawable.ColorDrawable
-import android.location.LocationManager
-import android.media.MediaPlayer
 import android.net.ConnectivityManager
-import android.net.Network
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.provider.Settings
@@ -33,17 +27,19 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.core.app.NotificationCompat
-
-import java.net.InetAddress
-import java.net.NetworkInterface
-import java.util.*
-import androidx.core.app.ActivityCompat.startActivityForResult
-import androidx.core.content.ContextCompat.startActivity
 import com.example.socketexample.Interface.Constants
 import com.example.socketexample.MainActivity
 import com.example.socketexample.R
 import com.example.socketexample.VaultLockerApp
-import com.google.gson.Gson
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.LocationSettingsResponse
+import com.google.android.gms.tasks.OnSuccessListener
+import com.google.android.gms.tasks.Task
+import java.net.InetAddress
+import java.net.NetworkInterface
+import java.util.*
 
 
 object Utility : Constants {
@@ -337,14 +333,35 @@ object Utility : Constants {
             //Turn on bluetooth
           //  LocationManager.EXTRA_LOCATION_ENABLED
 
-            val intent= Intent()
-            intent.setAction(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-            //   i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            //  i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            intent.putExtra(Constants.PARAM_PACKAGE_NAME, context.packageName)
-            context.startActivity(intent)
+
+            val locationRequest: LocationRequest = LocationRequest.create()
+            locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+            locationRequest.setInterval(10000)
+            locationRequest.setFastestInterval(10000 / 2)
+
+            val locationSettingsRequestBuilder = LocationSettingsRequest.Builder()
+
+            locationSettingsRequestBuilder.addLocationRequest(locationRequest)
+            locationSettingsRequestBuilder.setAlwaysShow(true)
+
+            val settingsClient = LocationServices.getSettingsClient(context)
+            val task: Task<LocationSettingsResponse> = settingsClient.checkLocationSettings(locationSettingsRequestBuilder.build())
+            task.addOnSuccessListener {
+                Toast.makeText(context, "Location settings (GPS) is ON.", Toast.LENGTH_LONG).show()
+                Log.e(TAG,"Location settings (GPS) is ON.")
+            }
+
+
+            /*     val intent= Intent()
+                 intent.setAction(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                 //   i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                 //  i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                 intent.putExtra(Constants.PARAM_PACKAGE_NAME, context.packageName)
+                 context.startActivity(intent)
+             */
+
             //stop  alarm
           //  stopAlarm(context)
 

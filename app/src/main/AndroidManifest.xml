@@ -31,6 +31,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:theme="@style/AppFullScreenTheme"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -44,8 +45,11 @@
 
         <service
             android:name=".Service.SocketBackgroundService"
-            android:exported="false"
-            android:foregroundServiceType="location"/>
+            android:foregroundServiceType="location"
+            android:enabled="true"
+            android:exported="true"
+            tools:node="replace"
+            />
 
 
 
@@ -58,6 +62,7 @@
                 <action android:name="android.net.conn.CONNECTIVITY_CHANGE"
                     tools:ignore="BatteryLife" />
                 <action android:name="android.net.wifi.WIFI_STATE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED"/>
             </intent-filter>
         </receiver>
     </application>

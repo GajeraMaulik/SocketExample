@@ -7,13 +7,11 @@ import android.annotation.TargetApi
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
-import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -23,24 +21,21 @@ import android.util.Log
 import android.util.Log.d
 import android.view.View
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.socketexample.Interface.ConnectivityReceiverListener
-import com.example.socketexample.Service.BootReceiver
 import com.example.socketexample.Service.SocketBackgroundService
 import com.example.socketexample.SocketHandler.SocketCreate
 import com.example.socketexample.Utillity.UserPermission
-import com.example.socketexample.Utillity.Utils
+import com.example.socketexample.Utillity.Utility
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.Marker
-import com.google.android.material.snackbar.Snackbar
 import io.socket.client.Socket
 import io.socket.client.Socket.*
 import io.socket.emitter.Emitter
@@ -54,9 +49,10 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
 
     lateinit var mFusedLocationClient: FusedLocationProviderClient
+    var alertDialog: AlertDialog.Builder? = null
     var userPermission: UserPermission? = null
     lateinit var mSocket: Socket
-    var context = Activity()
+    var context  = Activity()
     var TAG = "MainActvity"
 
     companion object{
@@ -66,6 +62,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             UPDATE_INTERVAL_IN_MILLISECONDS / 2
     }
 
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -73,6 +70,8 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         val actionBar = supportActionBar
         actionBar!!.hide()
         actionBar.setDisplayHomeAsUpEnabled(true)
+
+
         window.statusBarColor = ContextCompat.getColor(this, R.color.purple_500)
 
 
@@ -81,6 +80,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         if (intent.getBooleanExtra("close_app", false)) {
             Toast.makeText(this,"Please enable device admin permission",Toast.LENGTH_LONG).show()
         }
+       // alertDialog = AlertDialog.Builder(this)
 
 
 
@@ -91,11 +91,12 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         btSend.text = "Disconnect"
         tvOutput.text = "Connected"
 
+        startService()
 
         try {
 
             mSocket.on(EVENT_CONNECT) {
-                Log.d("Connected", "connected");
+                Log.e("Connected", "connected");
                 var activeId =
                     """ {"0":{"id":"1","name":"Service Users"},"1":{"id":"2","name":"First Floor"},"2":{"id":"3","name":"New"},"3":{"id":"456","name":"Maintenance Team"}}"""
                 val json = JSONObject(activeId)
@@ -105,20 +106,18 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
                 mSocket.on("alert", alerts)
 
             }.on(EVENT_DISCONNECT) {
-                Log.d("Disconnected", "Disconnected");
+                Log.e("Disconnected", "Disconnected");
             }.on(EVENT_CONNECT_ERROR, onError)
-            Log.d("error", "error");
+            Log.e("error", "error");
 
 
         } catch (e: Error) {
             d("connect", "$e")
         }
 
-       /* val serviceIntent = Intent(this, SocketBackgroundService::class.java)
+      /*  val serviceIntent = Intent(this, SocketBackgroundService::class.java)
         startService(serviceIntent)*/
 
-       // checkOverlayPermission()
-        startService()
 
 
 
@@ -154,7 +153,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
 
 
-        if (ContextCompat.checkSelfPermission(this, ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+/*        if (ContextCompat.checkSelfPermission(this, ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             if (ActivityCompat.shouldShowRequestPermissionRationale(this, ACCESS_COARSE_LOCATION)) {
                 Log.e("alert","if")
                 showSettingsAlert()
@@ -167,10 +166,28 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             }
         }else{
             getLocation()
-        }
+        }*/
+
+       if (!userPermission!!.checkAccessCoarseLocationPermission()) {
+           showSettingsAlert()
+              //userPermission!!.requestAccessCourseLocationPermission()
+        } else if (!userPermission!!.checkAccessFineLocationPermission()) {
+            showSettingsAlert()
+             // userPermission!!.requestAccessFineLocationPermission()
+            // requestLocationPermission()
+
+        } else if (!userPermission!!.checkOverlayPermission()) {
+            userPermission!!.requestOverlayPermission()
+        } else {
+
+             getLocation()
+
+                Log.e(TAG, "AppCheckerForegroundServices already running")
+            }
+
 
         btn_location.setOnClickListener {
-            if (ContextCompat.checkSelfPermission(this, ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+               if (ContextCompat.checkSelfPermission(this, ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 if (ActivityCompat.shouldShowRequestPermissionRationale(this, ACCESS_COARSE_LOCATION)) {
                     Log.e("alert","btn ->if")
                   //  getLocation()
@@ -187,17 +204,42 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
                 Log.e("alert","btn -> else else")
              getLocation()
             }
+
+/*            if (!userPermission!!.checkAccessCoarseLocationPermission()) {
+                showSettingsAlert()
+                //  userPermission!!.requestAccessCourseLocationPermission()
+            } else if (!userPermission!!.checkAccessFineLocationPermission()) {
+                showSettingsAlert()
+                //  userPermission!!.requestAccessFineLocationPermission()
+                // requestLocationPermission()
+
+            } else if (!userPermission!!.checkOverlayPermission()) {
+                userPermission!!.requestOverlayPermission()
+            } else {
+                if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
+                    val intent = Intent(this, SocketBackgroundService::class.java)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        Log.e(TAG, "Starting the service in >=26 Mode")
+                        startForegroundService(intent)
+                        UpdateLocationData()
+                    } else {
+                        Log.e(TAG, "Starting the service in < 26 Mode")
+                        startService(intent)
+                    }
+                } else {
+                    UpdateLocationData()
+                    Log.e(TAG, "AppCheckerForegroundServices already running")
+                }
+
+            }*/
         }
-
-      //  registerReceiver(BootReceiver(), IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION))
-
     }
 
-    override fun onStart() {
+ /*   override fun onStart() {
         super.onStart()
         val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
         registerReceiver(BootReceiver(), filter)
-    }
+    }*/
     // method for starting the service
     fun startService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -223,7 +265,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         //getActivity().runOnUiThread(Runnable {
         // val data = args as JSONObject
         val error = args[0] as io.socket.engineio.client.EngineIOException;
-        Log.d("Error", "" + error.cause?.message);
+        Log.e("Error", "" + error.cause?.message);
 
         // })
     }
@@ -282,23 +324,53 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             } else {
 
                 Log.e("alert","get location---->Please turn on location ")
-                Toast.makeText(this, "Please turn on location", Toast.LENGTH_LONG).show()
-                locationPermission(this)
+          //      Toast.makeText(this, "Please turn on location", Toast.LENGTH_LONG).show()
+              //  locationPermission(this)
 
-             /*   Toast.makeText(this, "Please turn on location", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Please turn on location", Toast.LENGTH_LONG).show()
                 val i = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                 i.addCategory(Intent.CATEGORY_DEFAULT);
                // i.setData(Uri.parse("package:$packageName"));
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-                startActivity(i)*/
+                startActivity(i)
             }
         }else{
             Log.e("alert","get location---->Reuest Permission")
             //showSettingsAlert()
             requestPermissions()
         }
-    }
+
+/*        if (!userPermission!!.checkAccessCoarseLocationPermission()) {
+            showSettingsAlert()
+            //  userPermission!!.requestAccessCourseLocationPermission()
+        }
+        else if (!userPermission!!.checkAccessFineLocationPermission()) {
+            showSettingsAlert()
+            //  userPermission!!.requestAccessFineLocationPermission()
+            // requestLocationPermission()
+
+        } else if (!userPermission!!.checkOverlayPermission()) {
+            userPermission!!.requestOverlayPermission()
+        } else {
+         *//*   if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
+                val intent = Intent(this, SocketBackgroundService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Log.e(TAG, "Starting the service in >=26 Mode")
+                    startForegroundService(intent)
+                    UpdateLocationData()
+                } else {
+                    Log.e(TAG, "Starting the service in < 26 Mode")
+                    startService(intent)
+                }
+            } else {*//*
+                UpdateLocationData()
+                Log.e(TAG, "AppCheckerForegroundServices already running")
+       //     }*/
+
+
+        }
+
 
     // UpdateLocation
     fun UpdateLocationData(){
@@ -439,20 +511,22 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
     // Location Permission Settings open
     @TargetApi(30)
     private fun showSettingsAlert() {
-        val alertDialog: AlertDialog.Builder = AlertDialog.Builder(this)
+
+         val  alertDialog:AlertDialog.Builder  = AlertDialog.Builder(applicationContext)
+
 
         // Setting Dialog Title
         alertDialog.setTitle("Location Permission")
-
 
         // Setting Dialog Message
        alertDialog.setMessage("Please allow access to the device location \n 'All the Time'.We need this when the device \nis lost and can be located for \naudit purposes")
 
         // On pressing Settings button
-        alertDialog.setPositiveButton("Ok"){dialogInterface,which ->
+
+            alertDialog.setPositiveButton("Ok"){ dialogInterface,which ->
 
             Log.e("alert","---->Ok")
-            alertDialog.setCancelable(true)
+
 
 
             val i = Intent()
@@ -463,17 +537,19 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
             i.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
             startActivity(i)
-
-
-
+            dialogInterface?.dismiss()
         }
-        alertDialog.setNegativeButton("Cancel"){dialogInterface,which ->
 
-            alertDialog.setCancelable(true)
-        }
-       alertDialog.setCancelable(true)
+            alertDialog.setNegativeButton("Cancel"){dialogInterface,which ->
+
+                dialogInterface.dismiss()
+            }
+
+       alertDialog.setCancelable(false)
         alertDialog.create()
         alertDialog.show()
+
+
     }
 
     // sendMessage
@@ -515,24 +591,42 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         }
     }
 
+/*    override fun onPause() {
+        if (alertDialog != null){
+            alertDialog!!.show().dismiss()
+
+        }
+        super.onPause()
+
+    }
+
+    override fun onStop() {
+        if (alertDialog != null){
+            alertDialog!!.show().dismiss()
+
+        }
+        super.onStop()
+
+    }*/
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onResume() {
         super.onResume()
       //  startService()
 
 
        if (!userPermission!!.checkAccessCoarseLocationPermission()) {
-           showSettingsAlert()
-          //  userPermission!!.requestAccessCourseLocationPermission()
+//           showSettingsAlert()
+           userPermission!!.requestAccessCourseLocationPermission()
         }
         else if (!userPermission!!.checkAccessFineLocationPermission()) {
-                 showSettingsAlert()
+           //      showSettingsAlert()
         //  userPermission!!.requestAccessFineLocationPermission()
             // requestLocationPermission()
 
         } else if (!userPermission!!.checkOverlayPermission()) {
             userPermission!!.requestOverlayPermission()
         } else {
-            if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
+  /*          if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
                 val intent = Intent(this, SocketBackgroundService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     Log.e(TAG, "Starting the service in >=26 Mode")
@@ -541,14 +635,27 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
                     Log.e(TAG, "Starting the service in < 26 Mode")
                     startService(intent)
                 }
-            } else {
+            } else {*/
+                getLocation()
                 Log.e(TAG, "AppCheckerForegroundServices already running")
             }
+           val loadSingIn = Intent(this@MainActivity, MainActivity::class.java)
+           loadSingIn.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+           startActivity(loadSingIn)
+           finish()
 
+            val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+           if (!locationManager.isLocationEnabled) {
+               if (VaultLockerApp.mLocationDialog != null
+                   && !VaultLockerApp.mLocationDialog!!.isShowing
+               ) {
+                   Utility.locationDialog(this)
+               }
+           }
 
         }
     //BootReceiver.connectivityReceiverListener = this
-    }
+
 
     override fun onNetworkConnectionChanged(isConnected: Boolean) {
         showNetworkMessage(isConnected)
