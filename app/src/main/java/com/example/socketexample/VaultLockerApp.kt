@@ -17,13 +17,24 @@ import com.example.socketexample.Utillity.PreferenceData
 
 
 class VaultLockerApp : Application(), LifecycleObserver {
+
+
+    companion object {
+          @JvmField
+        var exitBeaconList: ArrayList<String> = ArrayList()
+        var mLocationDialog: Dialog? = null
+        var mBeaconDialog: Dialog? = null
+        var mRingtone: MediaPlayer? = null
+         var preferenceData: PreferenceData? = null
+
+    }
     override fun onCreate() {
         super.onCreate()
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-        preferenceData = PreferenceData(this)
         Log.d("VaultLockerApp", "Application class created")
         mLocationDialog = Dialog(this)
         mBeaconDialog = Dialog(this)
+        preferenceData = PreferenceData(this)
 
         /*  val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
           audioManager.setStreamVolume(
@@ -46,14 +57,7 @@ class VaultLockerApp : Application(), LifecycleObserver {
 
     }
 
-    companion object {
-        @JvmField
-        var preferenceData: PreferenceData? = null
-        var exitBeaconList: ArrayList<String>? = null
-        var mLocationDialog: Dialog? = null
-        var mBeaconDialog: Dialog? = null
-        var mRingtone: MediaPlayer? = null
-    }
+
 
     @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
     fun onAppBackgrounded() {

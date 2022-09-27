@@ -10,7 +10,6 @@ import android.provider.Settings
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat.startActivity
 import com.example.socketexample.R
 
 class Comman :AppCompatActivity(){
@@ -30,6 +29,9 @@ companion object{
     const val PACKAGE_NAME = "com.example.socketexample"
     const val RESULT_DATA_KEY = "$PACKAGE_NAME.RESULT_DATA_KEY"
     const val REQUEST_CHECK_SETTINGS = 0x1
+
+    // Fields from build type: debug
+    const val IDENTIFIER = "e2c56db5-dffb-48d2-b060-d0f5a71096e0"
 }
 
     fun checkPermissions(): Boolean {

@@ -7,30 +7,36 @@ import android.annotation.TargetApi
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.location.Address
-import android.location.Geocoder
-import android.location.Location
-import android.location.LocationManager
+import android.location.*
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.util.Log.d
 import android.view.View
 import android.widget.Toast
+import androidx.annotation.NonNull
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequest
+import androidx.work.WorkManager
 import com.example.socketexample.Interface.ConnectivityReceiverListener
+import com.example.socketexample.Service.BootReceiver
 import com.example.socketexample.Service.SocketBackgroundService
 import com.example.socketexample.SocketHandler.SocketCreate
 import com.example.socketexample.Utillity.UserPermission
 import com.example.socketexample.Utillity.Utility
+import com.example.socketexample.Utillity.Utils
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
@@ -42,6 +48,7 @@ import io.socket.emitter.Emitter
 import kotlinx.android.synthetic.main.activity_main.*
 import org.json.JSONObject
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
@@ -54,6 +61,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
     lateinit var mSocket: Socket
     var context  = Activity()
     var TAG = "MainActvity"
+    private val UNIQUE_WORK_NAME = "StartMyBeaconServiceViaWorker"
 
     companion object{
         private const val REQUEST_LOCATION_CODE = 1
@@ -61,15 +69,14 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         private const val FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS =
             UPDATE_INTERVAL_IN_MILLISECONDS / 2
     }
-
-    @RequiresApi(Build.VERSION_CODES.P)
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
-        val actionBar = supportActionBar
-        actionBar!!.hide()
-        actionBar.setDisplayHomeAsUpEnabled(true)
+/*
+       val actionBar = supportActionBar
+       actionBar!!.hide()
+        actionBar?.setDisplayHomeAsUpEnabled(true)*/
 
 
         window.statusBarColor = ContextCompat.getColor(this, R.color.purple_500)
@@ -80,19 +87,20 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         if (intent.getBooleanExtra("close_app", false)) {
             Toast.makeText(this,"Please enable device admin permission",Toast.LENGTH_LONG).show()
         }
-       // alertDialog = AlertDialog.Builder(this)
 
+   //     startServiceViaWorker()
+
+        startService()
+
+
+        btSend.text = "Disconnect"
+        tvOutput.text = "Connected"
 
 
         SocketCreate.setSocket()
         mSocket = SocketCreate.getSocket()
 
         mSocket.connect()
-        btSend.text = "Disconnect"
-        tvOutput.text = "Connected"
-
-        startService()
-
         try {
 
             mSocket.on(EVENT_CONNECT) {
@@ -118,14 +126,9 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
       /*  val serviceIntent = Intent(this, SocketBackgroundService::class.java)
         startService(serviceIntent)*/
 
-
-
-
-
-
         //  mSocket.to(alerts)
 
-        d("print", "${mSocket.connected()}")
+        //d("print", "${mSocket.connected()}")
 
         //    mSocket.on("message${sender.id}", onConnect)
 
@@ -168,7 +171,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             getLocation()
         }*/
 
-       if (!userPermission!!.checkAccessCoarseLocationPermission()) {
+/*       if (!userPermission!!.checkAccessCoarseLocationPermission()) {
            showSettingsAlert()
               //userPermission!!.requestAccessCourseLocationPermission()
         } else if (!userPermission!!.checkAccessFineLocationPermission()) {
@@ -180,66 +183,132 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             userPermission!!.requestOverlayPermission()
         } else {
 
-             getLocation()
+                Log.e(TAG, "AppCheckerForegroundServices already running")
 
+           getLocation()
+        }*/
+
+
+
+
+        if (!userPermission!!.checkAccessCoarseLocationPermission()) {
+            showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                    " 'All the Time'.We need this when the device \n" +
+                    "is lost and can be located for \n" +
+                    "audit purposes")
+            //  userPermission!!.requestAccessCourseLocationPermission()
+        } else if (!userPermission!!.checkAccessFineLocationPermission()) {
+            showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                    " 'All the Time'.We need this when the device \n" +
+                    "is lost and can be located for \n" +
+                    "audit purposes")
+            //  userPermission!!.requestAccessFineLocationPermission()
+            // requestLocationPermission()
+
+        } else if (!userPermission!!.checkOverlayPermission()) {
+            showOvarlayDialog(this,"Appear on Top","Please Allow Permission")
+        } else {
+            if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
+                val intent = Intent(this, SocketBackgroundService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Log.e(TAG, "Starting the service in >=26 Mode")
+                    startForegroundService(intent)
+
+                        UpdateLocationData()
+
+                } else {
+                    Log.e(TAG, "Starting the service in < 26 Mode")
+                    startForegroundService(intent)
+                }
+            } else {
+              //  val intent = Intent(this, SocketBackgroundService::class.java)
+                getLocation()
+               // startService(intent)
                 Log.e(TAG, "AppCheckerForegroundServices already running")
             }
 
+        }
 
+        // Btn
         btn_location.setOnClickListener {
-               if (ContextCompat.checkSelfPermission(this, ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+ /*              if (ContextCompat.checkSelfPermission(this, ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 if (ActivityCompat.shouldShowRequestPermissionRationale(this, ACCESS_COARSE_LOCATION)) {
                     Log.e("alert","btn ->if")
                   //  getLocation()
-                    showSettingsAlert()
+                 //   showSettingsAlert()
+                    showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                            " 'All the Time'.We need this when the device \n" +
+                            "is lost and can be located for \n" +
+                            "audit purposes")
               //      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_BACKGROUND_LOCATION), permissionId);
                 } else {
                     Log.e("alert","btn -> else")
                     //checkPermissions()
-                    showSettingsAlert()
+                  //  showSettingsAlert()
+                    showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                            " 'All the Time'.We need this when the device \n" +
+                            "is lost and can be located for \n" +
+                            "audit purposes")
                 //    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), permissionId);
 
                 }
             }else{
-                Log.e("alert","btn -> else else")
-             getLocation()
-            }
+                Log.e(TAG,"btn -> else else")
 
-/*            if (!userPermission!!.checkAccessCoarseLocationPermission()) {
-                showSettingsAlert()
+                   Log.e(TAG, "btn -> AppCheckerForegroundServices already running")
+                  getLocation()
+            }*/
+
+            if (!userPermission!!.checkAccessCoarseLocationPermission()) {
+                showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                        " 'All the Time'.We need this when the device \n" +
+                        "is lost and can be located for \n" +
+                        "audit purposes")
                 //  userPermission!!.requestAccessCourseLocationPermission()
             } else if (!userPermission!!.checkAccessFineLocationPermission()) {
-                showSettingsAlert()
+                showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                        " 'All the Time'.We need this when the device \n" +
+                        "is lost and can be located for \n" +
+                        "audit purposes")
                 //  userPermission!!.requestAccessFineLocationPermission()
                 // requestLocationPermission()
 
             } else if (!userPermission!!.checkOverlayPermission()) {
-                userPermission!!.requestOverlayPermission()
+                showOvarlayDialog(this,"Appear on Top","Please Allow Permission")
             } else {
                 if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
                     val intent = Intent(this, SocketBackgroundService::class.java)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         Log.e(TAG, "Starting the service in >=26 Mode")
                         startForegroundService(intent)
-                        UpdateLocationData()
+
+                        var hadler = Handler()
+
+
+                           UpdateLocationData()
+
                     } else {
                         Log.e(TAG, "Starting the service in < 26 Mode")
                         startService(intent)
                     }
                 } else {
-                    UpdateLocationData()
+                   getLocation()
                     Log.e(TAG, "AppCheckerForegroundServices already running")
                 }
 
-            }*/
+            }
         }
     }
 
- /*   override fun onStart() {
+    override fun onStart() {
         super.onStart()
         val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
         registerReceiver(BootReceiver(), filter)
-    }*/
+        val location = IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
+        registerReceiver(BootReceiver(),location)
+    }
+
     // method for starting the service
     fun startService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -257,7 +326,6 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             startService(Intent(this, SocketBackgroundService::class.java))
         }
     }
-
 
 
     // Socket connetion error
@@ -287,16 +355,17 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
     }
 
-
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, @NonNull permissions: Array<out String>,@NonNull grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-
-        when(requestCode){
+        /*   when(requestCode){
          REQUEST_LOCATION_CODE -> if (grantResults.size > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
              // isLocationPermissionGranted()
-             getLocation()
+             if(!isLocationEnabled()){
+                 startService()
+             }else{
+                 UpdateLocationData()
+             }
              Log.e("alert","onRequest---->Permission Granted")
              Toast.makeText(this, "Permission Granted", Toast.LENGTH_SHORT).show()
          }
@@ -304,41 +373,103 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
          else -> {
 
              Log.e("alert","onRequest---->Permission Denied")
-
+             if(!isLocationEnabled()){
+                 startService()
+             }
              Toast.makeText(this, "Permission Denied", Toast.LENGTH_SHORT).show()
          }
-     }
+     }*/
+
+        if (requestCode == REQUEST_LOCATION_CODE) {
+            var foreground = false
+            var background = false
+            for (i in permissions.indices) {
+                if (permissions[i].equals(Manifest.permission.ACCESS_COARSE_LOCATION, ignoreCase = true)
+                ) {
+                    //foreground permission allowed
+                    if (grantResults[i] >= 0) {
+                        foreground = true
+                        Toast.makeText(applicationContext, "Foreground location permission allowed", Toast.LENGTH_SHORT).show()
+                        Log.e(TAG,"Foreground location permission allowed")
+                        startService()
+                        getLocation()
+                        continue
+                    } else {
+                        Toast.makeText(applicationContext, "Location Permission denied", Toast.LENGTH_SHORT).show()
+                        Log.e(TAG,"Location Permission denied")
+                        break
+                    }
+                }
+                if (permissions[i].equals(
+                        Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+                        ignoreCase = true
+                    )
+                ) {
+                    if (grantResults[i] >= 0) {
+                        foreground = true
+                        background = true
+
+                        Toast.makeText(applicationContext, "Background location location permission allowed", Toast.LENGTH_SHORT).show()
+                        Log.e(TAG,"Background location location permission allowed")
+                        startService()
+
+                    } else {
+                      //  SocketBackgroundService().GpsLocationDialog("Location Permission!","Please turn on location","Ok")
+                        startService()
+                        Toast.makeText(applicationContext, "Background location location permission denied", Toast.LENGTH_SHORT).show()
+                        Log.e(TAG,"Background location location permission denied")
+                    }
+                }
+            }
+            if (foreground) {
+                if (background) {
+                    handleLocationUpdates()
+                } else {
+                    handleForegroundLocationUpdates()
+                }
+            }
+        }
 
         }
+
+    private fun handleLocationUpdates() {
+        //foreground and background
+        Toast.makeText(applicationContext, "Start Foreground and Background Location Updates", Toast.LENGTH_SHORT).show()
+        Log.e(TAG,"Start Foreground and Background Location Updates")
+    }
+
+    private fun handleForegroundLocationUpdates() {
+        //handleForeground Location Updates
+        Toast.makeText(applicationContext, "Start foreground location updates", Toast.LENGTH_SHORT).show()
+        Log.e(TAG,"Start Foreground  Location Updates")
+    }
 
 
 
 
     // getLocation
     private fun getLocation() {
-        if (checkPermissions()) {
+     //   if (checkPermissions()) {
             if (isLocationEnabled()) {
 
+                    UpdateLocationData()
 
-                UpdateLocationData()
             } else {
 
                 Log.e("alert","get location---->Please turn on location ")
-          //      Toast.makeText(this, "Please turn on location", Toast.LENGTH_LONG).show()
-              //  locationPermission(this)
+                      //locationPermission(this)
+                startService()
 
+              //  showLocationDialog(this,"Location Permission","Please turn on location")
                 Toast.makeText(this, "Please turn on location", Toast.LENGTH_LONG).show()
-                val i = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+
+               /* val i = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                 i.addCategory(Intent.CATEGORY_DEFAULT);
                // i.setData(Uri.parse("package:$packageName"));
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-                startActivity(i)
-            }
-        }else{
-            Log.e("alert","get location---->Reuest Permission")
-            //showSettingsAlert()
-            requestPermissions()
+                startActivity(i)*/
+          //  }
         }
 
 /*        if (!userPermission!!.checkAccessCoarseLocationPermission()) {
@@ -370,6 +501,9 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
 
         }
+
+
+
 
 
     // UpdateLocation
@@ -473,50 +607,88 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
     }
 
-    // Location Permission Settings open
+    // GPS Location Permission Dialog
     @TargetApi(30)
-    private fun locationPermission(context: Context) {
+    private fun showLocationDialog(context: Context,title: String,msg:String) {
         val alertDialog: AlertDialog.Builder = AlertDialog.Builder(context)
 
         // Setting Dialog Title
-        alertDialog.setTitle("Location Permission")
+        alertDialog.setTitle(title)
 
 
         // Setting Dialog Message
-        alertDialog.setMessage("Please turn on location")
+        alertDialog.setMessage(msg)
 
         // On pressing Settings button
         alertDialog.setPositiveButton("Ok"){dialogInterface,which ->
+            dialogInterface.dismiss()
 
             Log.e("alert","--boot-->Ok")
-            alertDialog.setCancelable(true)
-
-            val i= Intent()
+            openGPSSettings()
+        /*    val i= Intent()
             i.setAction(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
          //   i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
           //  i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-            context.startActivity(i)
+            context.startActivity(i)*/
         }
 
         alertDialog.setNegativeButton("Cancel"){dialogInterface,which ->
 
-            alertDialog.setCancelable(true)
+            dialogInterface.dismiss()
         }
-        alertDialog.setCancelable(true)
         //alertDialog.create()
-        alertDialog.show()
+        if (!alertDialog.show().isShowing) {
+            //  Utility.startAlarm(this,1)
+            alertDialog.show()
+        }
     }
 
+
+    // Ovarlay Permission Dialog
+    private fun showOvarlayDialog(context: Context,title: String,msg:String) {
+        val alertDialog: AlertDialog.Builder = AlertDialog.Builder(context)
+
+        // Setting Dialog Title
+        alertDialog.setTitle(title)
+
+
+        // Setting Dialog Message
+        alertDialog.setMessage(msg)
+
+        // On pressing Settings button
+        alertDialog.setPositiveButton("Ok"){dialogInterface,which ->
+            dialogInterface.dismiss()
+
+            Log.e("alert","--boot-->Ok")
+            userPermission!!.requestOverlayPermission()
+
+           /* val i= Intent()
+            i.setAction(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+            //   i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            //  i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+            context.startActivity(i)*/
+        }
+
+        alertDialog.setNegativeButton("Cancel"){dialogInterface,which ->
+
+            dialogInterface.dismiss()
+        }
+        //alertDialog.create()
+        if (!alertDialog.show().isShowing) {
+            //  Utility.startAlarm(this,1)
+            alertDialog.show()
+        }
+    }
 
     // Location Permission Settings open
     @TargetApi(30)
     private fun showSettingsAlert() {
 
-         val  alertDialog:AlertDialog.Builder  = AlertDialog.Builder(applicationContext)
+         val  alertDialog:AlertDialog.Builder  = AlertDialog.Builder(this@MainActivity)
 
 
         // Setting Dialog Title
-        alertDialog.setTitle("Location Permission")
+        alertDialog.setTitle("Location Permission!")
 
         // Setting Dialog Message
        alertDialog.setMessage("Please allow access to the device location \n 'All the Time'.We need this when the device \nis lost and can be located for \naudit purposes")
@@ -527,17 +699,17 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
             Log.e("alert","---->Ok")
 
+                dialogInterface.dismiss()
 
 
             val i = Intent()
             i.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
             i.addCategory(Intent.CATEGORY_DEFAULT);
             i.setData(Uri.parse("package:$packageName"));
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-            i.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+//            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+//            i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+//            i.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
             startActivity(i)
-            dialogInterface?.dismiss()
         }
 
             alertDialog.setNegativeButton("Cancel"){dialogInterface,which ->
@@ -552,6 +724,45 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
     }
 
+    fun showSettingsDialog(title: String, msg: String) {
+        val builder = android.app.AlertDialog.Builder(this)
+        builder.setTitle(title)
+        builder.setMessage(msg)
+        builder.setPositiveButton(android.R.string.ok, null)
+        builder.setOnDismissListener {dialog ->
+            dialog.dismiss()
+
+            openSettings()
+        }
+        builder.show()
+        /* mAlertDialog = builder.create()
+         if (mAlertDialog != null) {
+             if (!mAlertDialog!!.isShowing) {
+                 mAlertDialog!!.show()
+             }
+         }*/
+    }
+    // navigating user to app settings
+    private fun openSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+        val uri = Uri.fromParts("package", packageName, null)
+        intent.data = uri
+        intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK;
+        //  startActivityForResult(intent, 101)
+        startActivity(intent)
+    }
+
+    // navigating user to app settings
+    private fun openGPSSettings() {
+        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+      //  val uri = Uri.fromParts("package", packageName, null)
+     //   intent.data = uri
+        intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK;
+        //  startActivityForResult(intent, 101)
+        startActivity(intent)
+    }
     // sendMessage
 /*    fun sendMessage() {
         //     val senderId = UUID.randomUUID().toString()
@@ -591,42 +802,47 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         }
     }
 
-/*    override fun onPause() {
-        if (alertDialog != null){
-            alertDialog!!.show().dismiss()
+    override fun onPause() {
 
-        }
         super.onPause()
+        Log.e(TAG, "App paused")
+//        VaultLockerApp.preferenceData!!.isDialogShowing = false
 
     }
 
-    override fun onStop() {
-        if (alertDialog != null){
-            alertDialog!!.show().dismiss()
 
-        }
-        super.onStop()
+    override fun onBackPressed() {
 
-    }*/
+        super.onBackPressed()
+    }
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onResume() {
         super.onResume()
       //  startService()
 
-
+//        VaultLockerApp.preferenceData!!.isDialogShowing = false
        if (!userPermission!!.checkAccessCoarseLocationPermission()) {
-//           showSettingsAlert()
-           userPermission!!.requestAccessCourseLocationPermission()
+         //  showSettingsAlert()
+           showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                   " 'All the Time'.We need this when the device \n" +
+                   "is lost and can be located for \n" +
+                   "audit purposes")
+        //   userPermission!!.requestAccessCourseLocationPermission()
         }
         else if (!userPermission!!.checkAccessFineLocationPermission()) {
-           //      showSettingsAlert()
+               //  showSettingsAlert()
+           showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                   " 'All the Time'.We need this when the device \n" +
+                   "is lost and can be located for \n" +
+                   "audit purposes")
         //  userPermission!!.requestAccessFineLocationPermission()
             // requestLocationPermission()
 
         } else if (!userPermission!!.checkOverlayPermission()) {
-            userPermission!!.requestOverlayPermission()
+           showOvarlayDialog(this,"Appear on Top","Please Allow Permission")
+          //  userPermission!!.requestOverlayPermission()
         } else {
-  /*          if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
+            if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
                 val intent = Intent(this, SocketBackgroundService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     Log.e(TAG, "Starting the service in >=26 Mode")
@@ -635,15 +851,16 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
                     Log.e(TAG, "Starting the service in < 26 Mode")
                     startService(intent)
                 }
-            } else {*/
-                getLocation()
+            } else {
+
                 Log.e(TAG, "AppCheckerForegroundServices already running")
             }
-           val loadSingIn = Intent(this@MainActivity, MainActivity::class.java)
-           loadSingIn.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-           startActivity(loadSingIn)
-           finish()
-
+   /*        if (VaultLockerApp.exitBeaconList.size > 0) {
+               // Utils.scheduleJob(this)
+               Utils.startService(this)
+           } else {
+               Log.d(TAG, "not start beacon service")
+           }*/
             val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
            if (!locationManager.isLocationEnabled) {
                if (VaultLockerApp.mLocationDialog != null
@@ -654,6 +871,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
            }
 
         }
+    }
     //BootReceiver.connectivityReceiverListener = this
 
 
@@ -661,8 +879,8 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         showNetworkMessage(isConnected)
     }
 
-
 }
+
 
 
 
