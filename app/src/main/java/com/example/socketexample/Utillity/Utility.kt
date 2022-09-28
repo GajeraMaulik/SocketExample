@@ -44,7 +44,7 @@ import java.util.*
 
 object Utility : Constants {
     private var mToast: Toast? = null
-
+var TAG = "Utility"
     @SuppressLint("ShowToast")
     fun toast(context: Context?, message: String) {
         if (context == null) return
@@ -321,7 +321,7 @@ object Utility : Constants {
 
     //    startAlarm(context, 2)
         //send notification
-        setNotification(context, 101, "Bluetooth", "Please turn on bluetooth")
+        setNotification(context, 101, "Gps Location", "Please turn on GPS")
 
         VaultLockerApp.mLocationDialog?.setCancelable(false)
         VaultLockerApp.mLocationDialog?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
@@ -348,7 +348,7 @@ object Utility : Constants {
             val task: Task<LocationSettingsResponse> = settingsClient.checkLocationSettings(locationSettingsRequestBuilder.build())
             task.addOnSuccessListener {
                 Toast.makeText(context, "Location settings (GPS) is ON.", Toast.LENGTH_LONG).show()
-                Log.e(TAG,"Location settings (GPS) is ON.")
+                Log.e(TAG,"Utility Location settings (GPS) is ON.")
             }
 
 
@@ -368,12 +368,12 @@ object Utility : Constants {
             //clear notification
             clearNotification(context, 101)
 
-            VaultLockerApp.mLocationDialog?.dismiss()
+            VaultLockerApp.mLocationDialog.dismiss()
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            VaultLockerApp.mLocationDialog?.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            VaultLockerApp.mLocationDialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
-        VaultLockerApp.mLocationDialog?.show()
+        VaultLockerApp.mLocationDialog.show()
     }
 
  /*   fun startAlarm(context: Context, playRing: Int) {

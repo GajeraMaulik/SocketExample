@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
 import android.util.Log.d
+import android.util.Log.i
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -115,14 +116,14 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
             try {
 
 
-                if (isAppIsInBackground(this@SocketBackgroundService)) {
+           /*     if (isAppIsInBackground(this@SocketBackgroundService)) {
                     GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
 
                 }else{
 
                     //VaultLockerApp.mLocationDialog?.isShowing = false
                     VaultLockerApp.preferenceData?.isDialogShowing = false
-                }
+                }*/
             }catch (e:Exception){
                 e.printStackTrace()
 
@@ -207,10 +208,10 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
             // val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
             //    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 100, 0)
 
-            VaultLockerApp.preferenceData?.isDialogShowing = false
+          //  VaultLockerApp.preferenceData?.isDialogShowing = false
 
             Log.e(TAG,"----dialog--------------->${isAppIsInBackground(this@SocketBackgroundService)}")
-            if (true) {
+            if (!isAppIsInBackground(this@SocketBackgroundService)) {
                 Log.e("Service", "--->Please turn on location false")
 
                 val locationRequest: LocationRequest = LocationRequest.create()
@@ -271,8 +272,9 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
                 }
 
             }else{
+                dialog.dismiss()
                 UpdateLocation()
-                Log.e("Service", "-->Please turn on location true")
+                Log.e(TAG, "-->Please turn on location true")
             }
 
           //  dialog.dismiss()
@@ -281,24 +283,28 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
-        if (!dialog.isShowing) {
+        if (!isLocationEnabled()) {
             dialog.show()
+        }else{
+            dialog.dismiss()
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onStart(intent: Intent?, startId: Int) {
         super.onStart(intent, startId)
         try {
 
 
-            if (isAppIsInBackground(this@SocketBackgroundService)) {
+         /*   if (isAppIsInBackground(this@SocketBackgroundService) == false) {
                 GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
 
             }else{
 
                 //VaultLockerApp.mLocationDialog?.isShowing = false
-                VaultLockerApp.preferenceData?.isDialogShowing = false
-            }
+                createNotification()
+              // VaultLockerApp.preferenceData?.isDialogShowing = false
+            }*/
         }catch (e:Exception){
             e.printStackTrace()
 
@@ -338,7 +344,13 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
     @RequiresApi(Build.VERSION_CODES.O)
     fun createNotification() {
 
+        Log.e(TAG,"--------->start")
 
+        val isGpsEnabled: Boolean = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val location: IntentFilter = IntentFilter(LocationManager.GPS_PROVIDER)
+        registerReceiver(BootReceiver(),location)
+
+        Log.e(TAG,"------service--------->${location.toString()}")
 
 
     //    Thread {
@@ -360,14 +372,14 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
                                 getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
                             Log.e(TAG,"--------------------->${isAppIsInBackground(this@SocketBackgroundService)}")
-                            if (isAppIsInBackground(this@SocketBackgroundService)) {
-                              //  GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
-                                Log.e("Service", "Please turn on location false")
+                         /*   if (isAppIsInBackground(this@SocketBackgroundService)) {
+                               // GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
+                                Log.e(TAG, "Please turn on location true")
                             }else{
                                 GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
-                                Log.e("Service", "Please turn on location true")
+                                Log.e(TAG, "Please turn on location false")
 
-                            }
+                            }*/
 
                         }
                     }
@@ -381,13 +393,7 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
 
                  Log.e("Service", "Service is running...")
 
-        Log.e(TAG,"--------->start")
 
-        val isGpsEnabled: Boolean = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        val location: IntentFilter = IntentFilter(LocationManager.GPS_PROVIDER)
-        registerReceiver(BootReceiver(),location)
-
-        Log.e(TAG,"------service--------->${location.toString()}")
 
         //  Log.e("Service", "Service is running try ...")
                     // Toast.makeText(this,"Service is Running..",Toast.LENGTH_LONG).show()

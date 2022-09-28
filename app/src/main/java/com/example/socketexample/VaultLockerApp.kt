@@ -22,7 +22,7 @@ class VaultLockerApp : Application(), LifecycleObserver {
     companion object {
           @JvmField
         var exitBeaconList: ArrayList<String> = ArrayList()
-        var mLocationDialog: Dialog? = null
+        lateinit var mLocationDialog: Dialog
         var mBeaconDialog: Dialog? = null
         var mRingtone: MediaPlayer? = null
          var preferenceData: PreferenceData? = null
