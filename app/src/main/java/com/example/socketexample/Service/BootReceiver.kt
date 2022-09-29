@@ -24,17 +24,23 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
-import androidx.core.content.ContextCompat.startActivity
+import androidx.core.content.ContextCompat.*
 import com.example.socketexample.Interface.ConnectivityReceiverListener
 import com.example.socketexample.MainActivity
 import com.example.socketexample.R
 import com.example.socketexample.Utillity.UserPermission
+import com.example.socketexample.Utillity.Utility
+import com.example.socketexample.Utillity.Utility.showSettingsDialog
+import com.example.socketexample.Utillity.Utils
+import com.example.socketexample.Utillity.Utils.startService
+import com.example.socketexample.VaultLockerApp.Companion.mLocationDialog
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.LocationSettingsResponse
 import com.google.android.gms.tasks.Task
+import java.security.AllPermission
 import java.util.*
 import android.location.LocationManager as LocationManager1
 
@@ -42,13 +48,15 @@ import android.location.LocationManager as LocationManager1
 class BootReceiver: BroadcastReceiver() {
 
     var TAG = "BroadcastReceiver"
-    lateinit var dialog :Dialog
+     var dialog :Dialog? = null
     var userPermission: UserPermission? = null
 
-    @RequiresApi(Build.VERSION_CODES.O)
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onReceive(context: Context, intent: Intent) {
 
-        dialog = Dialog(context)
+        if(dialog == null){
+            dialog = Dialog(context)
+        }
 
         userPermission = UserPermission(MainActivity())
 
@@ -61,11 +69,11 @@ class BootReceiver: BroadcastReceiver() {
                     Toast.makeText(context, "afert Boot Service is running...", Toast.LENGTH_LONG)
                         .show()
                     Log.e(TAG, "afert Boot Service is running...")
-                  /*  if (connectivityReceiverListener != null) {
+                    if (connectivityReceiverListener != null) {
                         connectivityReceiverListener!!.onNetworkConnectionChanged(
                             isConnectedOrConnecting(context)
                         )
-                    }*/
+                    }
 
                 }
 
@@ -79,8 +87,8 @@ class BootReceiver: BroadcastReceiver() {
 
             }
 
-
-        statusCheck(intent,context)
+         //   AllPermission(context)
+          statusCheck(intent,context)
 
             if (connectivityReceiverListener != null) {
                 connectivityReceiverListener!!.onNetworkConnectionChanged(isConnectedOrConnecting(context))
@@ -88,18 +96,75 @@ class BootReceiver: BroadcastReceiver() {
 
 
     }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    fun AllPermission(context: Context){
+        if (!userPermission!!.checkAccessCoarseLocationPermission()) {
+            //  showSettingsAlert()
+            showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                    " 'All the Time'.We need this when the device \n" +
+                    "is lost and can be located for \n" +
+                    "audit purposes",context)
+            //   userPermission!!.requestAccessCourseLocationPermission()
+        }
+        else if (!userPermission!!.checkAccessFineLocationPermission()) {
+            //  showSettingsAlert()
+            showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                    " 'All the Time'.We need this when the device \n" +
+                    "is lost and can be located for \n" +
+                    "audit purposes",context)
+            //  userPermission!!.requestAccessFineLocationPermission()
+            // requestLocationPermission()
+
+        } else if (!userPermission!!.checkOverlayPermission()) {
+            showOvarlayDialog(context,"Appear on Top","Please Allow Permission")
+            //  userPermission!!.requestOverlayPermission()
+        } else {
+            if (!Utils.isServiceRunning(context, SocketBackgroundService::class.java)) {
+                val intent = Intent(context, SocketBackgroundService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Log.e(TAG, "Starting the service in >=26 Mode")
+                    context.startForegroundService(intent)
+                } else {
+                    Log.e(TAG, "Starting the service in < 26 Mode")
+                   context.startService(intent)
+                }
+            } else {
+
+                Log.e(TAG, "AppCheckerForegroundServices already running")
+                SocketBackgroundService.startService(context, "Start Service...")
+           //     UpdateLocationData()
+            }
+
+            val locationManager: LocationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            if (!locationManager.isLocationEnabled) {
+                if (mLocationDialog != null && !mLocationDialog!!.isShowing) {
+                    /*   val isGpsEnabled: Boolean = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                       val location: IntentFilter = IntentFilter(LocationManager.GPS_PROVIDER)
+                       registerReceiver(BootReceiver(),location)*/
+                    Utility.locationDialog(context)
+
+                }
+            }else{
+             Log.e(TAG," Boot : Location alredy On")
+            }
+
+        }
+    }
+
+
     private fun GpsLocationDialog(message: String, okButtonText: String,context: Context) {
 //        VaultLockerApp.preferenceData!!.isDialogShowing = true
 
         Log.e("BootRecevier","GpsLocation")
 
      // val   dialog = Dialog(context)
-        dialog.setCancelable(false)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));
-        dialog.setContentView(R.layout.alert_dialog);
-        val tvTitle = dialog.findViewById<View>(R.id.tvTitle1) as TextView
-        val tvMsg = dialog.findViewById<View>(R.id.tvMsg) as TextView
-        val tvOk = dialog.findViewById<Button>(R.id.tvOk) as TextView
+        dialog?.setCancelable(false)
+        dialog?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));
+        dialog?.setContentView(R.layout.alert_dialog);
+        val tvTitle = dialog?.findViewById<View>(R.id.tvTitle1) as TextView
+        val tvMsg = dialog?.findViewById<View>(R.id.tvMsg) as TextView
+        val tvOk = dialog?.findViewById<Button>(R.id.tvOk) as TextView
         // tvTitle.text = "Device Locked!!"
         tvTitle.text = "Location Permission!"
         tvMsg.text = message
@@ -114,7 +179,7 @@ class BootReceiver: BroadcastReceiver() {
             //    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 100, 0)
 
 
-            if (!isAppIsInBackground(context)) {
+            if (isAppIsInBackground(context)) {
                 val startTime = Calendar.getInstance().timeInMillis
 
                 val locationRequest: LocationRequest = LocationRequest.create()
@@ -133,16 +198,16 @@ class BootReceiver: BroadcastReceiver() {
                 task.addOnSuccessListener {
                  //   VaultLockerApp.preferenceData?.isDialogShowing = false
 
-                    Log.e(TAG,"------------------->${dialog.context}")
+                    Log.e(TAG,"------------------->${dialog?.context}")
                   //  dialog.hide()
-                    dialog.dismiss()
+                    dialog?.dismiss()
                     Toast.makeText(context, "Location settings (GPS) is ON.", Toast.LENGTH_LONG).show()
                     Log.e(TAG,"Location settings (GPS) is ON.")
 
 
                 }
 
-                dialog.dismiss()
+                dialog?.dismiss()
 
 
                 task.addOnFailureListener() { e -> //  dialog.show()
@@ -169,24 +234,27 @@ class BootReceiver: BroadcastReceiver() {
                 }
           //      dialog.dismiss()
 
+            }else{
+                Log.e(TAG,"dialog dissmiss")
+                dialog?.dismiss()
             }
           //  dialog.dismiss()
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            dialog?.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
             Log.e(TAG,"dialog.window overlay")
         }
 
-        if(!isLocationEnabled(context)){
+        if(!Utility.isLocationEnabled(context)){
             Log.e(TAG,"dialog.show")
 
-            dialog.show()
+            dialog?.show()
 
        }else{
             Log.e(TAG,"dialog.hide")
 
-            dialog.dismiss()
+            dialog?.dismiss()
        }
     }
 
@@ -251,39 +319,28 @@ class BootReceiver: BroadcastReceiver() {
                 }
             }
         }
+        Log.e(TAG,"isINB $isInBackground")
         return isInBackground
     }
 
     fun statusCheck(intent:Intent,context: Context) {
-        val enabled = intent.getBooleanExtra("enabled", isLocationEnabled(context))
+        val enabled = intent.getBooleanExtra("enabled",isLocationEnabled(context))
 
         Log.e(TAG,"before:  $enabled")
         if(enabled){
-            dialog.dismiss()
+            dialog?.dismiss()
 
             Log.e(TAG,"if $enabled")
             Toast.makeText(context, "GPS false : $enabled", Toast.LENGTH_SHORT).show()
 
         }else{
             Log.e(TAG,"else $enabled")
-            GpsLocationDialog("Please turn on location","Ok",context)
+            if (!dialog?.isShowing!!){
+                GpsLocationDialog("Please turn on location","Ok",context)
 
-            Toast.makeText(context, "GPS true : $enabled", Toast.LENGTH_SHORT).show()
-            var dilogbox=dialog.isShowing
-            Log.e(TAG,"-->  dialog isshowing $dilogbox",)
-                Log.e(TAG,"if  dialog isshowing $dilogbox",)
-
-                Log.e(TAG,"else  dialog isshowing $dilogbox")
+                Toast.makeText(context, "GPS true : $enabled", Toast.LENGTH_SHORT).show()
+            }
         }
-
-  /*      val manager = context.getSystemService(LOCATION_SERVICE) as LocationManager1?
-        if (!manager!!.isProviderEnabled(LocationManager1.GPS_PROVIDER)) {
-            GpsLocationDialog("Please turn on location","Ok",context)
-         //   buildAlertMessageNoGps(context)
-        }else{
-          //  dialog.dismiss()
-            SocketBackgroundService.startService(context, "Start Service...")
-        }*/
     }
 
     private fun buildAlertMessageNoGps(context: Context) {

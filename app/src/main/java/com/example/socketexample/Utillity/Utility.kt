@@ -1,49 +1,54 @@
 package com.example.socketexample.Utillity
 
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.app.*
 import android.app.job.JobService
-import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.drawable.ColorDrawable
 import android.net.ConnectivityManager
+import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.provider.Settings
 import android.provider.Settings.SettingNotFoundException
 import android.text.SpannableStringBuilder
+import android.text.TextUtils
 import android.text.style.RelativeSizeSpan
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
-import android.widget.ImageView
-import android.widget.ProgressBar
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat.startActivity
 import com.example.socketexample.Interface.Constants
 import com.example.socketexample.MainActivity
 import com.example.socketexample.R
 import com.example.socketexample.VaultLockerApp
+import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.LocationSettingsResponse
-import com.google.android.gms.tasks.OnSuccessListener
 import com.google.android.gms.tasks.Task
 import java.net.InetAddress
 import java.net.NetworkInterface
 import java.util.*
 
 
+@SuppressLint("StaticFieldLeak")
 object Utility : Constants {
     private var mToast: Toast? = null
+   var dialog: Dialog? = null
+    var userPermission: UserPermission? = null
 var TAG = "Utility"
     @SuppressLint("ShowToast")
     fun toast(context: Context?, message: String) {
@@ -308,26 +313,18 @@ var TAG = "Utility"
 
 
     fun locationDialog(context: Context) {
-        //  dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+
+      //  setNotification(context, 101, "Gps Location", "Please turn on GPS")
         if (VaultLockerApp.mLocationDialog == null) {
-            VaultLockerApp.mLocationDialog = Dialog(context)
+            VaultLockerApp.mLocationDialog = Dialog(context.applicationContext)
         }
 
-        /* if (Utils.isServiceRunning(context, MyJobService::class.java)) {
-             //stop MyJobService
-             Log.d("classTag", "stop service")
-             context.stopService(Intent(context, MyJobService::class.java))
-         }*/
-
-    //    startAlarm(context, 2)
-        //send notification
-        setNotification(context, 101, "Gps Location", "Please turn on GPS")
 
         VaultLockerApp.mLocationDialog?.setCancelable(false)
         VaultLockerApp.mLocationDialog?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         VaultLockerApp.mLocationDialog?.setContentView(R.layout.alert_dialog)
-        val tvON = VaultLockerApp.mLocationDialog?.findViewById<View>(R.id.tvOk) as TextView
-        tvON.setOnClickListener {
+        val tvON = VaultLockerApp.mLocationDialog?.findViewById<Button>(R.id.tvOk)
+        tvON?.setOnClickListener {
             //start service
             // Utils.scheduleJob(context)
             //Turn on bluetooth
@@ -368,12 +365,251 @@ var TAG = "Utility"
             //clear notification
             clearNotification(context, 101)
 
-            VaultLockerApp.mLocationDialog.dismiss()
+            VaultLockerApp.mLocationDialog!!.dismiss()
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            VaultLockerApp.mLocationDialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            VaultLockerApp.mLocationDialog!!.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
-        VaultLockerApp.mLocationDialog.show()
+        VaultLockerApp.mLocationDialog!!.show()
+    }
+    fun isAppIsInBackground(context: Context): Boolean {
+        var isInBackground = true
+        val am = context.getSystemService(Service.ACTIVITY_SERVICE) as ActivityManager
+        val runningProcesses = am.runningAppProcesses
+        for (processInfo in runningProcesses) {
+            if (processInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+                for (activeProcess in processInfo.pkgList) {
+                    if (activeProcess == context.packageName) {
+                        isInBackground = false
+                    }
+                }
+            }
+        }
+        return isInBackground
+    }
+
+
+ fun GpsLocationDialog1(message: String, okButtonText: String,context: Context) {
+//        VaultLockerApp.preferenceData!!.isDialogShowing = true
+
+     if (dialog ==null){
+         dialog = Dialog(context)
+
+     }
+        Log.e("BootRecevier","GpsLocation")
+
+        // val   dialog = Dialog(context)
+        dialog?.setCancelable(false)
+        dialog?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));
+        dialog?.setContentView(R.layout.alert_dialog);
+        val tvTitle = dialog?.findViewById<View>(R.id.tvTitle1) as TextView
+        val tvMsg = dialog?.findViewById<View>(R.id.tvMsg) as TextView
+        val tvOk = dialog?.findViewById<Button>(R.id.tvOk) as TextView
+        // tvTitle.text = "Device Locked!!"
+        tvTitle.text = "Location Permission!"
+        tvMsg.text = message
+        if (!TextUtils.isEmpty(okButtonText)) {
+            tvOk.text = okButtonText
+        }
+
+        tvOk.setOnClickListener {
+            // Utility.stopAlarm(this)
+            Log.e(TAG,"-----boot---------------->okBtn Click")
+            // val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+            //    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 100, 0)
+
+
+            if (!isAppIsInBackground(context)) {
+                val startTime = Calendar.getInstance().timeInMillis
+
+                val locationRequest: LocationRequest = LocationRequest.create()
+                locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+                locationRequest.setInterval(10000)
+                locationRequest.setFastestInterval(10000 / 2)
+
+                val locationSettingsRequestBuilder = LocationSettingsRequest.Builder()
+
+                locationSettingsRequestBuilder.addLocationRequest(locationRequest)
+                locationSettingsRequestBuilder.setAlwaysShow(true)
+
+                val settingsClient = LocationServices.getSettingsClient(context)
+                val task: Task<LocationSettingsResponse> = settingsClient.checkLocationSettings(locationSettingsRequestBuilder.build())
+
+                task.addOnSuccessListener {
+                    //   VaultLockerApp.preferenceData?.isDialogShowing = false
+
+                    Log.e(TAG,"------------------->${dialog?.context}")
+                    //  dialog.hide()
+                    dialog?.dismiss()
+                    Toast.makeText(context, "Location settings (GPS) is ON.", Toast.LENGTH_LONG).show()
+                    Log.e(TAG,"Location settings (GPS) is ON.")
+
+
+                }
+
+                dialog?.dismiss()
+
+
+                task.addOnFailureListener() { e -> //  dialog.show()
+
+                    if (e is ResolvableApiException) {
+                        // Location settings are not satisfied, but this can be fixed
+                        // by showing the user a dialog.
+                        try {
+                            // Show the dialog by calling startResolutionForResult(),
+                            // and check the result in onActivityResult().
+                            //e.startResolutionForResult(context,REQUEST_CHECK_SETTINGS)
+                            val i = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                            i.addCategory(Intent.CATEGORY_DEFAULT);
+                            // i.setData(Uri.parse("package:$packageName"));
+                            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                            context.startActivity(i)
+
+                        } catch (e: IntentSender.SendIntentException) {
+                            e.printStackTrace()
+                        }
+                    }
+                    Log.e(TAG, "Failure")
+                }
+                //      dialog.dismiss()
+
+            }else{
+                dialog?.dismiss()
+            }
+            //  dialog.dismiss()
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog?.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            Log.e(TAG,"dialog.window overlay")
+        }
+
+        if(!Utility.isLocationEnabled(context)){
+            Log.e(TAG,"dialog.show")
+
+            dialog?.show()
+
+        }else{
+            Log.e(TAG,"dialog.hide")
+
+            dialog?.dismiss()
+        }
+    }
+
+
+    // GPS Location Permission Dialog
+    @TargetApi(30)
+    private fun showLocationDialog(context: Context,title: String,msg:String) {
+        val alertDialog: AlertDialog.Builder = AlertDialog.Builder(context)
+
+        // Setting Dialog Title
+        alertDialog.setTitle(title)
+
+
+        // Setting Dialog Message
+        alertDialog.setMessage(msg)
+
+        // On pressing Settings button
+        alertDialog.setPositiveButton("Ok"){dialogInterface,which ->
+            dialogInterface.dismiss()
+
+            Log.e("alert","--boot-->Ok")
+            openGPSSettings(context)
+            /*    val i= Intent()
+                i.setAction(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+             //   i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+              //  i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                context.startActivity(i)*/
+        }
+
+        alertDialog.setNegativeButton("Cancel"){dialogInterface,which ->
+
+            dialogInterface.dismiss()
+        }
+        //alertDialog.create()
+        if (!alertDialog.show().isShowing) {
+            //  Utility.startAlarm(this,1)
+            alertDialog.show()
+        }
+    }
+
+
+    // Ovarlay Permission Dialog
+    private fun showOvarlayDialog(context: Context,title: String,msg:String) {
+        val alertDialog: AlertDialog.Builder = AlertDialog.Builder(context)
+
+        // Setting Dialog Title
+        alertDialog.setTitle(title)
+
+
+        // Setting Dialog Message
+        alertDialog.setMessage(msg)
+
+        // On pressing Settings button
+        alertDialog.setPositiveButton("Ok"){dialogInterface,which ->
+            dialogInterface.dismiss()
+
+            Log.e("alert","--boot-->Ok")
+            userPermission!!.requestOverlayPermission()
+
+            /* val i= Intent()
+             i.setAction(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+             //   i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+             //  i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+             context.startActivity(i)*/
+        }
+
+        alertDialog.setNegativeButton("Cancel"){dialogInterface,which ->
+
+            dialogInterface.dismiss()
+        }
+        //alertDialog.create()
+        if (!alertDialog.show().isShowing) {
+            //  Utility.startAlarm(this,1)
+            alertDialog.show()
+        }
+    }
+
+
+    fun showSettingsDialog(title: String, msg: String,context: Context) {
+        val builder = android.app.AlertDialog.Builder(context)
+        builder.setTitle(title)
+        builder.setMessage(msg)
+        builder.setPositiveButton(android.R.string.ok, null)
+        builder.setOnDismissListener {dialog ->
+            dialog.dismiss()
+
+            openSettings(context)
+        }
+        builder.show()
+        /* mAlertDialog = builder.create()
+         if (mAlertDialog != null) {
+             if (!mAlertDialog!!.isShowing) {
+                 mAlertDialog!!.show()
+             }
+         }*/
+    }
+    // navigating user to app settings
+    private fun openSettings(context: Context) {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+        val uri = Uri.fromParts("package", context.packageName, null)
+        intent.data = uri
+        intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK;
+        //  startActivityForResult(intent, 101)
+      context.  startActivity(intent)
+    }
+
+    // navigating user to app settings
+    private fun openGPSSettings(context: Context) {
+        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+        //  val uri = Uri.fromParts("package", packageName, null)
+        //   intent.data = uri
+        intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK;
+        //  startActivityForResult(intent, 101)
+       context. startActivity(intent)
     }
 
  /*   fun startAlarm(context: Context, playRing: Int) {
@@ -445,6 +681,8 @@ var TAG = "Utility"
         }
     }
 */
+
+
     fun setNotification(context: Context, id: Int, title: String, msg: String) {
         //wakeUpScreen()
         val notificationBuilder: NotificationCompat.Builder = NotificationCompat.Builder(context)

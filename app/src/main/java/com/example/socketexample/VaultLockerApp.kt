@@ -22,7 +22,7 @@ class VaultLockerApp : Application(), LifecycleObserver {
     companion object {
           @JvmField
         var exitBeaconList: ArrayList<String> = ArrayList()
-        lateinit var mLocationDialog: Dialog
+   var mLocationDialog: Dialog? = null
         var mBeaconDialog: Dialog? = null
         var mRingtone: MediaPlayer? = null
          var preferenceData: PreferenceData? = null
@@ -32,7 +32,11 @@ class VaultLockerApp : Application(), LifecycleObserver {
         super.onCreate()
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         Log.d("VaultLockerApp", "Application class created")
-        mLocationDialog = Dialog(this)
+
+        if (mLocationDialog == null){
+            mLocationDialog = Dialog(this)
+
+        }
         mBeaconDialog = Dialog(this)
         preferenceData = PreferenceData(this)
 

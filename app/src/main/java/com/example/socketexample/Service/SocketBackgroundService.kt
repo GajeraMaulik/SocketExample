@@ -9,8 +9,16 @@ import android.content.IntentSender.SendIntentException
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.location.*
-import android.os.*
+import android.location.Address
+import android.location.Geocoder
+import android.location.Location
+import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
@@ -24,24 +32,19 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.getSystemService
 import com.example.socketexample.Interface.ConnectivityReceiverListener
 import com.example.socketexample.Interface.Constants
 import com.example.socketexample.MainActivity
 import com.example.socketexample.R
-import com.example.socketexample.Service.Comman.Companion.REQUEST_CHECK_SETTINGS
-import com.example.socketexample.Utillity.PreferenceData
+import com.example.socketexample.Utillity.Utility
+import com.example.socketexample.Utillity.Utility.clearNotification
+import com.example.socketexample.Utillity.Utility.isAppIsInBackground
 import com.example.socketexample.VaultLockerApp
-import com.google.android.gms.common.api.GoogleApiClient
-import com.google.android.gms.common.api.PendingResult
 import com.google.android.gms.common.api.ResolvableApiException
-import com.google.android.gms.common.api.Status
 import com.google.android.gms.location.*
-import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices.getFusedLocationProviderClient
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.tasks.Task
-import com.google.gson.Gson
 import java.util.*
 
 
@@ -52,8 +55,7 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
     lateinit var notificationManager: NotificationManager
     lateinit var notificationChannel: NotificationChannel
     lateinit var builder: Notification.Builder
-    lateinit var dialog :Dialog
-    lateinit var preferenceData: PreferenceData
+     var dialog :Dialog?= null
     lateinit var locationManager : LocationManager
     private val permissionId = 2
     var TAG = "Socket Service"
@@ -74,6 +76,7 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
     }
 
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate() {
         super.onCreate()
         Log.e(TAG, "Service is Creating")
@@ -84,58 +87,44 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
 
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        dialog= Dialog(this@SocketBackgroundService)
+        if (dialog == null){
+            dialog= Dialog(this@SocketBackgroundService)
+
+        }
+
 
          locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
 
+        if(checkForInternet(this)){
+            Toast.makeText(this, "Your internet connection was restored.", Toast.LENGTH_LONG).show()
+            Log.e(TAG, "isConnected :: Your internet connection was restored.")
 
-        Log.e(TAG,"--------->start")
-        val location = IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
-        registerReceiver(BootReceiver(),location)
-
-        Log.e(TAG,"------service---------$location")
+        }else{
+            Toast.makeText(this, "You are currently offline", Toast.LENGTH_LONG).show()
+            Log.e(TAG, "!isConnected :: You are currently offline")
+        }
 
 
         if (!foregroundServiceRunning()) {
-            val serviceIntent = Intent(
-                this,
-                SocketBackgroundService::class.java
-            )
-           /* if (VaultLockerApp.preferenceData!!.isDialogShowing) {
-                //Toast.makeText(getApplicationContext(),"Toast3",Toast.LENGTH_LONG).show();
-                Log.d(TAG, "Dialog still open")
-                return
-            }*/
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-                //GpsLocationDialog("Please turn on location","Ok")
-                createNotification()
-            }
-        }else{
-            try {
-
-
-           /*     if (isAppIsInBackground(this@SocketBackgroundService)) {
-                    GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
-
+           if (!isAppIsInBackground(baseContext)){
+                val serviceIntent = Intent(
+                    this,
+                    SocketBackgroundService::class.java
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent)
+                    //GpsLocationDialog("Please turn on location","Ok")
+                    createNotification()
                 }else{
-
-                    //VaultLockerApp.mLocationDialog?.isShowing = false
-                    VaultLockerApp.preferenceData?.isDialogShowing = false
-                }*/
-            }catch (e:Exception){
-                e.printStackTrace()
-
+                    startForegroundService(serviceIntent)
+                    //GpsLocationDialog("Please turn on location","Ok")
+                    createNotification()
+                }
             }
         }
 
     }
-
-
-
-
-
     override fun onBind(p0: Intent?): IBinder? = null
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -177,24 +166,22 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
 
          startForeground(1001, notification.build())*/
         createNotification()
-
-
         return START_STICKY
     }
 
 
     // Gps Location Dialog
     fun GpsLocationDialog(title:String,message: String, okButtonText: String) {
-        VaultLockerApp.preferenceData?.isDialogShowing = true
+     //   VaultLockerApp.preferenceData?.isDialogShowing = true
+        !dialog!!.isShowing
+        Log.e(TAG,"service : GpsLocation dialod show")
 
-        Log.e("Service","GpsLocation")
-
-        dialog.setCancelable(false)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));
-        dialog.setContentView(R.layout.alert_dialog);
-        val tvTitle = dialog.findViewById<View>(R.id.tvTitle1) as TextView
-        val tvMsg = dialog.findViewById<View>(R.id.tvMsg) as TextView
-        val tvOk = dialog.findViewById<Button>(R.id.tvOk) as TextView
+        dialog?.setCancelable(false)
+        dialog?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));
+        dialog?.setContentView(R.layout.alert_dialog);
+        val tvTitle = dialog?.findViewById<View>(R.id.tvTitle1) as TextView
+        val tvMsg = dialog?.findViewById<View>(R.id.tvMsg) as TextView
+        val tvOk = dialog?.findViewById<Button>(R.id.tvOk) as TextView
         // tvTitle.text = "Device Locked!!"
         tvTitle.text = title
         tvMsg.text = message
@@ -209,10 +196,10 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
             //    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 100, 0)
 
           //  VaultLockerApp.preferenceData?.isDialogShowing = false
-
+            !dialog!!.isShowing
             Log.e(TAG,"----dialog--------------->${isAppIsInBackground(this@SocketBackgroundService)}")
-            if (!isAppIsInBackground(this@SocketBackgroundService)) {
-                Log.e("Service", "--->Please turn on location false")
+            if (isAppIsInBackground(this@SocketBackgroundService)) {
+                Log.e("Service", "--->Please turn on location ")
 
                 val locationRequest: LocationRequest = LocationRequest.create()
                 locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
@@ -228,7 +215,7 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
                 val task: Task<LocationSettingsResponse> = settingsClient.checkLocationSettings(locationSettingsRequestBuilder.build())
                 task.addOnSuccessListener {
 
-                    dialog.dismiss()
+                    dialog?.dismiss()
                     Toast.makeText(this, "Location settings (GPS) is ON.", Toast.LENGTH_LONG).show()
                     Log.e(TAG,"Location settings (GPS) is ON.")
 
@@ -243,7 +230,7 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
                        // }
                     }.start()
                 }
-                // dialog.dismiss()
+                 dialog?.dismiss()
 
                 task.addOnFailureListener() { e -> //  dialog.show()
 
@@ -272,44 +259,24 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
                 }
 
             }else{
-                dialog.dismiss()
-                UpdateLocation()
-                Log.e(TAG, "-->Please turn on location true")
+                dialog?.dismiss()
+             //   UpdateLocation()
+                Log.e(TAG, "--> turn on location true")
             }
 
           //  dialog.dismiss()
             //  Log.e(TAG,"else --->")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            dialog?.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         if (!isLocationEnabled()) {
-            dialog.show()
+            dialog?.show()
         }else{
-            dialog.dismiss()
+            dialog?.dismiss()
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
-    override fun onStart(intent: Intent?, startId: Int) {
-        super.onStart(intent, startId)
-        try {
-
-
-         /*   if (isAppIsInBackground(this@SocketBackgroundService) == false) {
-                GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
-
-            }else{
-
-                //VaultLockerApp.mLocationDialog?.isShowing = false
-                createNotification()
-              // VaultLockerApp.preferenceData?.isDialogShowing = false
-            }*/
-        }catch (e:Exception){
-            e.printStackTrace()
-
-        }
-    }
 
 
     fun foregroundServiceRunning(): Boolean {
@@ -322,21 +289,40 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
         return false
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        d(TAG, "The service has been destroyed".toUpperCase())
-    /*    Toast.makeText(this, "Service destroyed", Toast.LENGTH_SHORT).show()
-        Log.e(TAG, "Service Stopped")
-        stopForegroundService()
-        if (mFusedLocationClient != null) {
-            val intent = Intent(context, SocketBackgroundService::class.java)
-            val i = PendingIntent.getActivity(this, 0, intent, 0)
-            mFusedLocationClient.removeLocationUpdates(i)
-            Log.e(TAG, "Location Update Callback Removed")
-        }*/
+    fun statusCheck(context: Context) {
+        val intent= Intent()
+        val enabled = intent.getBooleanExtra("enabled", isLocationEnabled())
+
+        Log.e(TAG,"before:  $enabled")
+        if(enabled){
+            dialog?.dismiss()
+
+            Log.e(TAG,"if $enabled")
+            Toast.makeText(context, "GPS false : $enabled", Toast.LENGTH_SHORT).show()
+
+        }else{
+            Log.e(TAG,"else $enabled")
+            if (!dialog?.isShowing!!){
+                GpsLocationDialog("Location Permission","Please turn on location","Ok")
+
+                Toast.makeText(context, "GPS true : $enabled", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
 
-        // stopForegroundService()
+    override fun onStart(intent: Intent?, startId: Int) {
+        super.onStart(intent, startId)
+    /*    Log.e(TAG,"--------->start")
+        val location = IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
+        registerReceiver(BootReceiver(),location)
+
+        val isGpsEnabled: Boolean = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val gpsLocation: IntentFilter = IntentFilter(LocationManager.GPS_PROVIDER)
+        registerReceiver(BootReceiver(),location)
+
+
+        Log.e(TAG,"------service---------$location")*/
     }
 
 
@@ -346,57 +332,33 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
 
         Log.e(TAG,"--------->start")
 
-        val isGpsEnabled: Boolean = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        val location: IntentFilter = IntentFilter(LocationManager.GPS_PROVIDER)
-        registerReceiver(BootReceiver(),location)
-
-        Log.e(TAG,"------service--------->${location.toString()}")
-
-
-    //    Thread {
-          //  while (true) {
-              //  Log.e("Service", "Service is running...")
-                try {
+            //    try {
                     //  Toast.makeText(this,"Service is Running..",Toast.LENGTH_LONG).show()
                     if (checkPermission()) {
                       //  Log.e("Service", " if Service is running try ...")
-                        if (isLocationEnabled()) {
+                        if (!isLocationEnabled()) {
 
-                            Log.e("Service", " location On true")
+                            Log.e("Service", " location On false")
+                            if (!dialog?.isShowing!!) {
 
-                            UpdateLocation()
+                                val handle = Handler()
+
+                                handle.postDelayed({
+                                    GpsLocationDialog("Location Permission","Please turn on location","Ok")
+                                    Log.e(TAG,"handl dilog show")
+                                    //        statusCheck(context)
+                                                   },1500)
+                                Log.e(TAG, "Service dialog open")
+                            }
                         } else {
-                            Log.e("Service", "Please turn on location false")
-
-                            val locationManager: LocationManager =
-                                getSystemService(Context.LOCATION_SERVICE) as LocationManager
-
-                            Log.e(TAG,"--------------------->${isAppIsInBackground(this@SocketBackgroundService)}")
-                         /*   if (isAppIsInBackground(this@SocketBackgroundService)) {
-                               // GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
-                                Log.e(TAG, "Please turn on location true")
-                            }else{
-                                GpsLocationDialog("Location Permission!", "Please turn on location", "Ok")
-                                Log.e(TAG, "Please turn on location false")
-
-                            }*/
+                            Log.e(TAG, "Please turn on location true")
+                               UpdateLocation()
 
                         }
                     }
-                  //  Thread.sleep(2000)
-                } catch (e: InterruptedException) {
-                    e.printStackTrace()
-                }
-         //   }
-     //   }.start()
-
-
-                 Log.e("Service", "Service is running...")
-
-
-
-        //  Log.e("Service", "Service is running try ...")
-                    // Toast.makeText(this,"Service is Running..",Toast.LENGTH_LONG).show()
+             //   } catch (e: InterruptedException) {
+              //      e.printStackTrace()
+              //  }
 
 
         val channel = NotificationChannel(CHANNEL_ID, CHANNEL_ID, NotificationManager.IMPORTANCE_LOW)
@@ -443,45 +405,47 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
 
             return
         }
-        LocationServices.getFusedLocationProviderClient(this)
-            .requestLocationUpdates(locationRequest, object : LocationCallback() {
-                override fun onLocationResult(locationresult: LocationResult) {
-                    super.onLocationResult(locationresult)
 
-                    LocationServices.getFusedLocationProviderClient(this@SocketBackgroundService)
-                        .removeLocationUpdates(this)
-                    if (locationresult.locations != null && locationresult.locations.size > 0) {
-                        val latestLocationIndex: Int = locationresult.locations.size - 1
-                        val latitude: Double =
-                            locationresult.locations.get(latestLocationIndex).latitude
-                        val longitude: Double =
-                            locationresult.locations.get(latestLocationIndex).longitude
+              LocationServices.getFusedLocationProviderClient(this)
+                  .requestLocationUpdates(locationRequest, object : LocationCallback() {
+                      override fun onLocationResult(locationresult: LocationResult) {
+                          super.onLocationResult(locationresult)
 
-                        val latLng = LatLng(latitude, longitude)
-                        //    drawMarker(latLng)
-                        val geocoder = Geocoder(this@SocketBackgroundService, Locale.getDefault())
-                        val list: List<Address> =
-                            geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)
+                          LocationServices.getFusedLocationProviderClient(this@SocketBackgroundService)
+                              .removeLocationUpdates(this)
+                          if (locationresult.locations != null && locationresult.locations.size > 0) {
+                              val latestLocationIndex: Int = locationresult.locations.size - 1
+                              val latitude: Double =
+                                  locationresult.locations.get(latestLocationIndex).latitude
+                              val longitude: Double =
+                                  locationresult.locations.get(latestLocationIndex).longitude
 
-                        /*  Log.e("Service", "Latitude ---> ${list[0].latitude}")
-                          Log.e("Service", "Longitude ---> ${list[0].longitude}")
-                          Log.e("Service", "contuny name ---> ${list[0].countryName}")
-                          Log.e("Service", "Locality ---> ${list[0].locality}")*/
-                        Log.e("Service", "Address  ----> ${list[0].getAddressLine(0)}")
+                              val latLng = LatLng(latitude, longitude)
+                              //    drawMarker(latLng)
+                              val geocoder = Geocoder(this@SocketBackgroundService, Locale.getDefault())
+                              val list: List<Address> =
+                                  geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)
 
-
-                        val location: Location = Location("providerNA")
-                        location.latitude = latitude
-                        location.longitude = longitude
-                        // fetchAddressFromLatLong(location)
-                        //placeMarkerOnMap(latLng)
-
-                    } else {
+                              /*  Log.e("Service", "Latitude ---> ${list[0].latitude}")
+                                Log.e("Service", "Longitude ---> ${list[0].longitude}")
+                                Log.e("Service", "contuny name ---> ${list[0].countryName}")
+                                Log.e("Service", "Locality ---> ${list[0].locality}")*/
+                              Log.e("Service", "Address  ----> ${list[0].getAddressLine(0)}")
 
 
-                    }
-                }
-            }, Looper.getMainLooper())
+                              val location: Location = Location("providerNA")
+                              location.latitude = latitude
+                              location.longitude = longitude
+                              // fetchAddressFromLatLong(location)
+                              //placeMarkerOnMap(latLng)
+
+                          } else {
+
+
+                          }
+                      }
+                  }, Looper.getMainLooper())
+
 
     }
 
@@ -502,14 +466,51 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
 
     // Location Permissions Check
     private fun checkPermission(): Boolean {
-        val result =
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-        val result1 =
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        val result = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        val result1 = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         //   Log.e("Service","result  : $result " + "result1 : $result1")
         return result == PackageManager.PERMISSION_GRANTED && result1 == PackageManager.PERMISSION_GRANTED
     }
 
+
+    private fun checkForInternet(context: Context): Boolean {
+
+        // register activity with the connectivity manager service
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        // if the android version is equal to M
+        // or greater we need to use the
+        // NetworkCapabilities to check what type of
+        // network has the internet connection
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+
+            // Returns a Network object corresponding to
+            // the currently active default data network.
+            val network = connectivityManager.activeNetwork ?: return false
+
+            // Representation of the capabilities of an active network.
+            val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+            return when {
+                // Indicates this network uses a Wi-Fi transport,
+                // or WiFi has network connectivity
+                activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
+
+                // Indicates this network uses a Cellular transport. or
+                // Cellular has network connectivity
+                activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
+
+                // else return false
+                else -> false
+            }
+        } else {
+            // if the android version is below M
+            @Suppress("DEPRECATION") val networkInfo =
+                connectivityManager.activeNetworkInfo ?: return false
+            @Suppress("DEPRECATION")
+            return networkInfo.isConnected
+        }
+    }
 
     // Internet On/Off
     private fun internetPermission(isConnected: Boolean) {
@@ -517,14 +518,12 @@ class SocketBackgroundService : Service(), ConnectivityReceiverListener {
 
             Toast.makeText(this, "You are currently offline", Toast.LENGTH_LONG).show()
             Log.e("Service", "!isConnected :: You are currently offline")
-            /*   snackBar = Snackbar.make(findViewById(R.id.), "You are offline", Snackbar.LENGTH_LONG) //Assume "rootLayout" as the root layout of every activity.
-               snackBar?.duration = BaseTransientBottomBar.LENGTH_INDEFINITE
-               snackBar?.show()*/
+
         } else {
             Toast.makeText(this, "Your internet connection was restored.", Toast.LENGTH_LONG).show()
             Log.e("Service", "isConnected :: Your internet connection was restored.")
 
-            // snackBar?.dismiss()
+
         }
     }
 

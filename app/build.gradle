@@ -5,11 +5,9 @@ plugins {
 
     id 'kotlin-android-extensions'
     id  'kotlin-kapt'
-//    id 'com.google.gms.google-services'
 
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
 
-//    id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
 }
 
 android {
@@ -73,9 +71,8 @@ android {
         implementation 'com.google.android.gms:play-services-maps:18.1.0'
         implementation 'com.google.android.gms:play-services-location:20.0.0'
 
-        //Get running app
-      //  implementation 'com.rvalerio:fgchecker:1.1.0'
-        implementation 'com.karumi:dexter:6.2.3'
+
         implementation 'androidx.work:work-runtime:2.7.0-alpha05'
+        //noinspection GradleDynamicVersion
         implementation 'org.altbeacon:android-beacon-library:2+'
     }
