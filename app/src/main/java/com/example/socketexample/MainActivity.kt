@@ -34,6 +34,7 @@ import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import com.example.socketexample.Interface.ConnectivityReceiverListener
 import com.example.socketexample.Service.BootReceiver
+import com.example.socketexample.Service.MyBeaconWorker
 import com.example.socketexample.Service.SocketBackgroundService
 import com.example.socketexample.SocketHandler.SocketCreate
 import com.example.socketexample.Utillity.UserPermission
@@ -58,10 +59,8 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
 
     lateinit var mFusedLocationClient: FusedLocationProviderClient
-    var alertDialog: AlertDialog.Builder? = null
     var userPermission: UserPermission? = null
     lateinit var mSocket: Socket
-    var context  = Activity()
     var TAG = "MainActvity"
     private val UNIQUE_WORK_NAME = "StartMyBeaconServiceViaWorker"
     lateinit var locationManager : LocationManager
@@ -94,6 +93,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
       }
 
         userPermission = UserPermission(this@MainActivity)
+        startServiceViaWorker()
 
         if (intent.getBooleanExtra("close_app", false)) {
             Toast.makeText(this,"Please enable device admin permission",Toast.LENGTH_LONG).show()
@@ -116,7 +116,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
         mSocket.connect()
         try {
-            if( checkForInternet(context)){
+            if( checkForInternet(this)){
                 Toast.makeText(this, "Your internet connection was restored.", Toast.LENGTH_LONG).show()
                 Log.e(TAG, "isConnected :: Your internet connection was restored.")
                 mSocket.on(EVENT_CONNECT) {
@@ -216,8 +216,8 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
         } else if (!userPermission!!.checkOverlayPermission()) {
             showOvarlayDialog(this,"Appear on Top","Please Allow Permission")
-        }else {
-            if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
+        } else {
+            if (!SocketBackgroundService.isServiceRunning(this, SocketBackgroundService::class.java)) {
                 val intent = Intent(this, SocketBackgroundService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     Log.e(TAG, "Starting the service in >=26 Mode")
@@ -231,12 +231,12 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             } else {
               //  val intent = Intent(this, SocketBackgroundService::class.java)
                 Log.e(TAG, "AppCheckerForegroundServices already running")
-                val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
+             /*   val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
                 registerReceiver(BootReceiver(), filter)
                 val location = IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
                 registerReceiver(BootReceiver(),location)
 
-                getLocation()
+                getLocation()*/
             }
 
         }
@@ -289,7 +289,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             } else if (!userPermission!!.checkOverlayPermission()) {
                 showOvarlayDialog(this,"Appear on Top","Please Allow Permission")
             } else {
-                if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
+                if (!SocketBackgroundService.isServiceRunning(this, SocketBackgroundService::class.java)) {
                     val intent = Intent(this, SocketBackgroundService::class.java)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
@@ -306,12 +306,12 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
                 } else {
 
                     Log.e(TAG, "AppCheckerForegroundServices already running")
-                    val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
+             /*       val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
                     registerReceiver(BootReceiver(), filter)
                     val location = IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
                     registerReceiver(BootReceiver(),location)
 
-                      getLocation()
+                      getLocation()*/
 
                 }
 
@@ -319,7 +319,25 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         }
     }
 
+    private fun startServiceViaWorker() {
+        Log.d(TAG, "startServiceViaWorker called")
+        val workManager = WorkManager.getInstance(this)
+        // As per Documentation: The minimum repeat interval that can be defined is 15 minutes
+        // (same as the JobScheduler API), but in practice 15 doesn't work. Using 16 here
+        val request = PeriodicWorkRequest.Builder(
+            MyBeaconWorker::class.java,
+            16,
+            TimeUnit.MINUTES
+        ).build()
 
+        // to schedule a unique work, no matter how many times app is opened i.e. startServiceViaWorker gets called
+        // do check for AutoStart permission
+        workManager.enqueueUniquePeriodicWork(
+            UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
 
     // method for starting the service
     fun startService() {
@@ -357,10 +375,6 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
         d("data", "$data")
         SharePref.save(this, "alertdata", data)
-        //  val jsonObject = JSONObject(args[0].toString())
-        //   val data = SharePref.getJsonObject(this,"alertdata")
-
-        //  d("alert", "${data.toString()}")
 
 
     }
@@ -401,17 +415,17 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
                         foreground = true
                         Toast.makeText(applicationContext, "Foreground location permission allowed", Toast.LENGTH_SHORT).show()
                         Log.e(TAG,"Foreground location permission allowed")
-                        startService()
+                        //startService()
 
-                      getLocation()
+                    //  getLocation()
                         continue
                     } else {
                         Toast.makeText(applicationContext, "Location Permission denied", Toast.LENGTH_SHORT).show()
                         Log.e(TAG,"Location Permission denied")
-                        showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                  /*      showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
                                 " 'All the Time'.We need this when the device \n" +
                                 "is lost and can be located for \n" +
-                                "audit purposes")
+                                "audit purposes")*/
                         break
                     }
                 }
@@ -426,14 +440,14 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
 
                         Toast.makeText(applicationContext, "Background location location permission allowed", Toast.LENGTH_SHORT).show()
                         Log.e(TAG,"Background location location permission allowed")
-                        startService()
+                     //   startService()
 
                     } else {
                       //  SocketBackgroundService().GpsLocationDialog("Location Permission!","Please turn on location","Ok")
-                        showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
+                    /*    showSettingsDialog("Location Permission!","Please allow access to the device location \n" +
                                 " 'All the Time'.We need this when the device \n" +
                                 "is lost and can be located for \n" +
-                                "audit purposes")
+                                "audit purposes")*/
                         Toast.makeText(applicationContext, "Background location location permission denied", Toast.LENGTH_SHORT).show()
                         Log.e(TAG,"Background location location permission denied")
                     }
@@ -480,7 +494,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
                       //locationPermission(this)
             //   startService()
 
-               showLocationDialog(this,"Location Permission","Please turn on location")
+          //     showLocationDialog(this,"Location Permission","Please turn on location")
                 Toast.makeText(this, "Please turn on location", Toast.LENGTH_LONG).show()
 
 
@@ -876,7 +890,7 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
         }else if (!userPermission!!.checkBackgroundLocationPermission()){
            userPermission!!.requestBackgroundLocationPermission()
        } else {
-            if (!Utils.isServiceRunning(this, SocketBackgroundService::class.java)) {
+            if (!SocketBackgroundService.isServiceRunning(this, SocketBackgroundService::class.java)) {
                 val intent = Intent(this, SocketBackgroundService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     Log.e(TAG, "Starting the service in >=26 Mode")
@@ -888,24 +902,24 @@ class MainActivity : AppCompatActivity(), ConnectivityReceiverListener {
             } else {
 
                 Log.e(TAG, "AppCheckerForegroundServices already running")
-                UpdateLocationData()
             }
+           if (VaultLockerApp.exitBeaconList.size > 0) {
+               // Utils.scheduleJob(this)
+               SocketBackgroundService.startService(this)
+           } else {
+               Log.d(TAG, "not start beacon service")
+           }
 
             val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
            if (!locationManager.isLocationEnabled) {
                if (mLocationDialog != null && !mLocationDialog!!.isShowing) {
-                   val isGpsEnabled: Boolean = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-                   val location: IntentFilter = IntentFilter(LocationManager.GPS_PROVIDER)
-                   registerReceiver(BootReceiver(),location)
-                 // Utility.locationDialog(context)
-
-                  // showLocationDialog(this,"Location Permission","Please turn on location")
+                       Utility.locationDialog(this@MainActivity)
 
                }
            }
 
         }
-        BootReceiver.connectivityReceiverListener = this
+     //   BootReceiver.connectivityReceiverListener = this
 
     }
 

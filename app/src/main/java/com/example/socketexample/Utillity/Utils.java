@@ -1,13 +1,16 @@
 package com.example.socketexample.Utillity;
 
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
+import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Process;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -38,7 +41,17 @@ public class Utils {
         }
         return "0x" + new String(hexChars);
     }
+    public static boolean postLollipop() {
+        return Build.VERSION.SDK_INT >= 21;
+    }
 
+    @TargetApi(19)
+    public static boolean hasUsageStatsPermission(Context context) {
+        AppOpsManager appOps = (AppOpsManager)context.getSystemService(Context.APP_OPS_SERVICE);
+        int mode = appOps.checkOpNoThrow("android:get_usage_stats", Process.myUid(), context.getPackageName());
+        boolean granted = mode == 0;
+        return granted;
+    }
     public final static String bytesToHexAndString(byte[] bytes) {
         if (bytes == null) return null;
 

@@ -313,10 +313,9 @@ var TAG = "Utility"
 
 
     fun locationDialog(context: Context) {
-
       //  setNotification(context, 101, "Gps Location", "Please turn on GPS")
         if (VaultLockerApp.mLocationDialog == null) {
-            VaultLockerApp.mLocationDialog = Dialog(context.applicationContext)
+            VaultLockerApp.mLocationDialog = Dialog(context)
         }
 
 
@@ -347,7 +346,31 @@ var TAG = "Utility"
                 Toast.makeText(context, "Location settings (GPS) is ON.", Toast.LENGTH_LONG).show()
                 Log.e(TAG,"Utility Location settings (GPS) is ON.")
             }
+            task.addOnFailureListener() { e -> //  dialog.show()
 
+                if (e is ResolvableApiException) {
+                    // Location settings are not satisfied, but this can be fixed
+                    // by showing the user a dialog.
+                    try {
+                        // Show the dialog by calling startResolutionForResult(),
+                        // and check the result in onActivityResult().
+                        //e.startResolutionForResult(context,REQUEST_CHECK_SETTINGS)
+                        val i = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                        i.addCategory(Intent.CATEGORY_DEFAULT);
+                        // i.setData(Uri.parse("package:$packageName"));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                        i.putExtra(Constants.PARAM_PACKAGE_NAME, context.packageName)
+                        context.startActivity(i)
+
+                        Log.e(TAG, "GPS Off")
+
+
+                    } catch (e: IntentSender.SendIntentException) {
+                        e.printStackTrace()
+                    }
+                }
+            }
 
             /*     val intent= Intent()
                  intent.setAction(Settings.ACTION_LOCATION_SOURCE_SETTINGS)

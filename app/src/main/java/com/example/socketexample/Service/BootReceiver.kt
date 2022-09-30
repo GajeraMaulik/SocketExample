@@ -26,13 +26,13 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat.*
 import com.example.socketexample.Interface.ConnectivityReceiverListener
+import com.example.socketexample.Interface.LocationListener
 import com.example.socketexample.MainActivity
 import com.example.socketexample.R
 import com.example.socketexample.Utillity.UserPermission
 import com.example.socketexample.Utillity.Utility
 import com.example.socketexample.Utillity.Utility.showSettingsDialog
 import com.example.socketexample.Utillity.Utils
-import com.example.socketexample.Utillity.Utils.startService
 import com.example.socketexample.VaultLockerApp.Companion.mLocationDialog
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.LocationRequest
@@ -50,7 +50,7 @@ class BootReceiver: BroadcastReceiver() {
     var TAG = "BroadcastReceiver"
      var dialog :Dialog? = null
     var userPermission: UserPermission? = null
-
+    var mLocationListener: LocationListener? = null
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onReceive(context: Context, intent: Intent) {
 
@@ -65,7 +65,8 @@ class BootReceiver: BroadcastReceiver() {
             when (action) {
                 Intent.ACTION_BOOT_COMPLETED -> {
 
-                    SocketBackgroundService.startService(context, "Start Service...")
+               //     SocketBackgroundService.startService(context, "Start Service...")
+                    Utils.startService(context)
                     Toast.makeText(context, "afert Boot Service is running...", Toast.LENGTH_LONG)
                         .show()
                     Log.e(TAG, "afert Boot Service is running...")
@@ -80,7 +81,7 @@ class BootReceiver: BroadcastReceiver() {
                 Intent.ACTION_REBOOT -> {
 
                     SocketBackgroundService.stopService(context)
-                    SocketBackgroundService().createNotification()
+                 //   SocketBackgroundService().createNotification()
                     Log.e(TAG, " ReBoot Service is stop...")
 
                 }
@@ -120,7 +121,7 @@ class BootReceiver: BroadcastReceiver() {
             showOvarlayDialog(context,"Appear on Top","Please Allow Permission")
             //  userPermission!!.requestOverlayPermission()
         } else {
-            if (!Utils.isServiceRunning(context, SocketBackgroundService::class.java)) {
+            if (!SocketBackgroundService.isServiceRunning(context, SocketBackgroundService::class.java)) {
                 val intent = Intent(context, SocketBackgroundService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     Log.e(TAG, "Starting the service in >=26 Mode")
@@ -132,7 +133,7 @@ class BootReceiver: BroadcastReceiver() {
             } else {
 
                 Log.e(TAG, "AppCheckerForegroundServices already running")
-                SocketBackgroundService.startService(context, "Start Service...")
+                SocketBackgroundService.startService(context)
            //     UpdateLocationData()
             }
 
@@ -179,7 +180,7 @@ class BootReceiver: BroadcastReceiver() {
             //    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 100, 0)
 
 
-            if (isAppIsInBackground(context)) {
+        //    if (isAppIsInBackground(context)) {
                 val startTime = Calendar.getInstance().timeInMillis
 
                 val locationRequest: LocationRequest = LocationRequest.create()
@@ -204,13 +205,13 @@ class BootReceiver: BroadcastReceiver() {
                     Toast.makeText(context, "Location settings (GPS) is ON.", Toast.LENGTH_LONG).show()
                     Log.e(TAG,"Location settings (GPS) is ON.")
 
-
                 }
 
                 dialog?.dismiss()
 
 
                 task.addOnFailureListener() { e -> //  dialog.show()
+                   // mLocationListener?.locationOn()
 
                     if (e is ResolvableApiException) {
                         // Location settings are not satisfied, but this can be fixed
@@ -234,12 +235,12 @@ class BootReceiver: BroadcastReceiver() {
                 }
           //      dialog.dismiss()
 
-            }else{
+        //    }else{
                 Log.e(TAG,"dialog dissmiss")
                 dialog?.dismiss()
             }
           //  dialog.dismiss()
-        }
+    //    }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             dialog?.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
@@ -336,6 +337,7 @@ class BootReceiver: BroadcastReceiver() {
         }else{
             Log.e(TAG,"else $enabled")
             if (!dialog?.isShowing!!){
+              //  mLocationListener?.locationOn()
                 GpsLocationDialog("Please turn on location","Ok",context)
 
                 Toast.makeText(context, "GPS true : $enabled", Toast.LENGTH_SHORT).show()
